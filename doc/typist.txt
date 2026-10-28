@@ -1,0 +1,205 @@
+*typist.txt*  Type your own code, in place, as a typing test
+
+Author:  Chen Yi Jun
+License: MIT
+
+==============================================================================
+CONTENTS                                                     *typist-contents*
+
+  1. Introduction ............................. |typist-intro|
+  2. Requirements ............................. |typist-requirements|
+  3. Usage .................................... |typist-usage|
+  4. Commands ................................. |typist-commands|
+  5. Mappings ................................. |typist-mappings|
+  6. Configuration ............................ |typist-config|
+  7. Highlights ............................... |typist-highlights|
+  8. Stats .................................... |typist-stats|
+  9. Lua API .................................. |typist-api|
+
+==============================================================================
+1. INTRODUCTION                                                 *typist-intro*
+
+Typist turns your own code into a typing test. Select code and type it again
+over its ghost text, or type through every hunk of your git changes. Each
+correctly typed character gets its syntax colors back, mistakes turn red, and
+everything else in the buffer is dimmed. Comments are shown but not typed,
+and in an edited line only the changed words are typed.
+
+The buffer is never modified. Everything is drawn with |extmarks|.
+
+==============================================================================
+2. REQUIREMENTS                                          *typist-requirements*
+
+- Neovim 0.11 or newer.
+- `git` on $PATH, only for |:TypistDiff|.
+- 'termguicolors' is recommended. Without it, approximate 256-color
+  highlights are used.
+
+Run `:checkhealth typist` to verify.
+
+==============================================================================
+3. USAGE                                                        *typist-usage*
+
+Selection ~
+Select text in visual mode and run |:Typist| (or |<Plug>(typist-visual)|).
+Charwise and blockwise selections keep their columns.
+
+Git changes ~
+Run |:TypistDiff| anywhere in a file. Every changed line is shown as ghost
+text and the rest of the file is dimmed. The test starts at the hunk nearest
+the cursor and jumps to the next one each time you finish, until the last
+hunk in the file. Hunks above the starting point are not visited. The lines
+a hunk replaced are shown struck through above it. Lines that were only
+deleted are shown struck through too, with nothing to type.
+
+Keys during a test ~
+  {char}          Type it. A wrong char turns red and the cursor moves on.
+                  A wrong key at the end of a line, or <CR> mid-line,
+                  flashes the cursor red.
+  <BS> <C-h>      Delete the previous character, across line breaks too.
+  <C-w>           Delete the previous word.
+  <CR>            Go to the next line. Indentation is filled in.
+  <C-n>           Skip the current hunk (diff mode, `diff.skip_keys`).
+  <Esc> <C-c>     Stop the test. These are the only keys that end it.
+
+A round finishes only when its last character is typed correctly. Mappings
+do not apply while a test is running.
+
+==============================================================================
+4. COMMANDS                                                  *typist-commands*
+
+                                                                     *:Typist*
+:[range]Typist          Start a test over [range] or the last visual
+                        selection. Without a range: the whole buffer.
+
+                                                                 *:TypistDiff*
+:TypistDiff [base]      Type the lines changed in git, hunk by hunk, from
+                        the hunk nearest the cursor to the end of the file.
+                        [base] is "index" (default: unstaged changes,
+                        including unsaved edits) or any revision such as
+                        "HEAD" or "main".
+
+                                                              *:TypistResults*
+:TypistResults          Show the results card of the last test.
+
+                                                               *:TypistOption*
+:TypistOption {name} [on|off]
+                        Toggle a boolean option for this session, for example
+                        `:TypistOption live_stats off`.
+
+==============================================================================
+5. MAPPINGS                                                  *typist-mappings*
+
+Typist defines no mappings. Map these yourself:
+
+                                                       *<Plug>(typist-visual)*
+<Plug>(typist-visual)   x     Test the visual selection.
+                                                       *<Plug>(typist-buffer)*
+<Plug>(typist-buffer)   n     Test the whole buffer.
+                                                         *<Plug>(typist-diff)*
+<Plug>(typist-diff)     n     Type the git changes.
+
+Example: >lua
+  vim.keymap.set("x", "<leader>ty", "<Plug>(typist-visual)")
+  vim.keymap.set("n", "<leader>tY", "<Plug>(typist-buffer)")
+  vim.keymap.set("n", "<leader>td", "<Plug>(typist-diff)")
+  vim.keymap.set("n", "<leader>tr", "<cmd>TypistResults<cr>")
+<
+
+==============================================================================
+6. CONFIGURATION                                               *typist-config*
+
+`require("typist").setup()` is optional. Defaults: >lua
+  require("typist").setup({
+    live_stats = true,
+    show_wpm = true,            -- live stats and results card
+    show_accuracy = true,       -- live stats and results card
+    show_timer = true,
+    show_progress = true,
+    show_results = true,
+    dim_outside = true,
+    dim_amount = 0.85,          -- 0 = no fade, 1 = invisible
+    skip_leading_whitespace = true,
+    trim_trailing_whitespace = true,
+    skip_comments = true,       -- comments are shown, not typed
+    idle_timeout = 5,           -- longest pause counted, in seconds
+    hud = { position = "top_right" },
+    newline_symbol = "⏎",
+    diff = {
+      base = "index",
+      show_deleted = true,
+      max_deleted = 8,
+      changed_text_only = true, -- only type the changed words
+      skip_keys = { "<C-n>" },
+    },
+    highlights = {},
+  })
+<
+`diff.skip_keys` replaces the default list instead of being merged with it.
+
+`skip_comments` finds comments with treesitter, or with 'commentstring' for
+whole-line comments when the buffer has no parser.
+`diff.changed_text_only`: a line rewritten more than halfway is typed whole.
+`idle_timeout`: set to false to count every pause in full.
+
+==============================================================================
+7. HIGHLIGHTS                                              *typist-highlights*
+
+All groups are derived from the colorscheme and recomputed on |ColorScheme|.
+Override them with the `highlights` option; a plain |:highlight| is replaced
+on the next |ColorScheme|.
+
+  TypistGhost       Text not typed yet.
+  TypistError       A wrongly typed character.
+  TypistCursor      The typing cursor.
+  TypistNewline     The marker where <CR> is expected.
+  TypistDim         Code outside the test.
+  TypistDimNr       Line numbers outside the test.
+  TypistFocus       Band behind the lines being typed.
+  TypistSkipped     Comments inside the test (not typed).
+  TypistDeleted     Replaced or deleted lines (diff mode).
+  TypistHud TypistHudValue TypistHudLabel TypistHudSep
+                    The live stats line.
+  TypistResult TypistResultBorder TypistResultTitle TypistResultValue
+  TypistResultGood TypistResultBad
+                    The results card.
+
+==============================================================================
+8. STATS                                                        *typist-stats*
+
+  WPM        (correct characters / 5) per minute. <CR> counts as a character.
+  Raw        (keystrokes / 5) per minute: every key pressed, right or
+             wrong, including ones later backspaced.
+  Accuracy   Correct keystrokes / all keystrokes. Fixed mistakes still
+             count. Backspace is not a keystroke.
+  Errors     Keystrokes that did not match.
+  Time       First to last keystroke of each round. Time between hunks is
+             not counted. Each hunk's first key is charged one average
+             key interval, so short hunks do not inflate WPM. A pause
+             between two keys counts as at most `idle_timeout` seconds.
+
+Auto-filled indentation, skipped comments and unchanged parts of edited
+lines count towards none of these.
+
+==============================================================================
+9. LUA API                                                        *typist-api*
+
+typist.setup({opts})                                          *typist.setup()*
+typist.start({spec})                                          *typist.start()*
+    {spec}: `{ line1, line2 }`, `{ region = getregionpos(...) }` or
+    `{ targets = { { row, col, text }, ... } }` (0-based row and col).
+typist.start_visual()                                  *typist.start_visual()*
+typist.start_diff({spec})                                *typist.start_diff()*
+    {spec}: `{ base = "HEAD" }`.
+typist.stop()                                                  *typist.stop()*
+    End the running test from code (a timer or autocmd).
+typist.is_active()                                        *typist.is_active()*
+typist.show_last()                                        *typist.show_last()*
+typist.set_option({name}, {value})                       *typist.set_option()*
+
+`start()` and `start_diff()` block until the test ends and return
+`{ stats, completed, title?, rounds? }`, also stored in `typist.last`.
+`title` and `rounds` (`{ finished, total }` hunks) are set in diff mode.
+They return nil when no test was started.
+
+ vim:tw=78:ts=8:ft=help:norl:
